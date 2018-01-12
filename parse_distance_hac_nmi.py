@@ -177,13 +177,13 @@ def cluster_score(distance_matrix, data_label, size):
 if __name__ == "__main__":
     if len(sys.argv) < 2:
         print("Please provide file name! ")
-        print("e.g. python3 parse_distance_nmi.py your_distance.dm")
+        print("e.g. python3 parse_distance_hac_nmi.py your_distance.dm")
         exit()
     filename = sys.argv[1]
     (dist_mat, data_label, size) = parse_distance_matrix(filename)
     F = cluster_score(dist_mat, data_label, size)
 
-    # Uncomment to check more information 
+    # Uncomment to check more information
     # plt.plot(F, 'r-')
     # plt.ylabel("NMI")
     # plt.xlabel("nclusters")
