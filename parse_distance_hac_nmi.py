@@ -33,7 +33,7 @@ def fatal_error(gram_matrix_expression, index_1, index_2, exp, tokens):
     exit()
 
 def parse_distance_matrix(filename):
-    LOG_INFO(filename);
+    # LOG_INFO(filename);
     head_p=re.compile(r'(\d+):(\S+)?') # ? represents greedy to match as much as possible
     # elmt_p=re.compile(r'(\d+):(\S+)')
     distance_matrix = {}

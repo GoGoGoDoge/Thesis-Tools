@@ -33,7 +33,7 @@ def fatal_error(gram_matrix_expression, index_1, index_2, exp, tokens):
     exit()
 
 def parse_distance_matrix(filename):
-    LOG_INFO(filename);
+    # LOG_INFO(filename);
     head_p=re.compile(r'(\d+):(\S+)?') # ? represents greedy to match as much as possible
     # elmt_p=re.compile(r'(\d+):(\S+)')
     distance_matrix = {}
@@ -86,7 +86,7 @@ def get_k_medoids_clusters(distance_matrix, num_iters):
     # 2. Update clusters
     # 3. Update medoids
     # 4. Repeat 2 and 3 for specified iterations
-    for num_clusters in range (2, ci):
+    for num_clusters in range (2, ci + 1): # shall add one here 
         medoids_ = random.sample(range(0, ci), num_clusters)
         clusters_ = []
         # Specified iterations by users
