@@ -130,7 +130,7 @@ def cluster_score(distance_matrix, data_label, data_size):
         print(str(len(clusters)) + "," + str(NMI)+ "," + str(IY_C_HY)+ "," + str(IY_C_HC) + "," + str(F) + "," + str(ARI))
         scores.insert(0, F)
 
-    return F
+    return scores
 
 def get_labels(clusters):
     total_elements = sum([len(cluster) for cluster in clusters]);

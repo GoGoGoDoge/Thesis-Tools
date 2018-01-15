@@ -78,39 +78,88 @@ def convert_2_square_matrix(distance_matrix, size):
     return result
 
 
-def get_hac_clusters(distance_matrix):
+def get_k_medoids_clusters(distance_matrix, num_iters):
     result = []
     ci = len(distance_matrix)
-    clusters = {}
-    for i in range(ci):
-        clusters[i] = []
-        clusters[i].append(i)
-    result.append(dict(clusters))
-    X = ssd.squareform(distance_matrix)
-    # Other available method: [single, complete, average, weighted, centroid, median, ward]
-    Z = linkage(X, 'complete')
-    idx = 1
-    for layer in Z:
-        i1 = int(layer[0])
-        i2 = int(layer[1])
-        clusters[ci] = clusters[i1] + clusters[i2]
-        clusters.pop(i1)
-        clusters.pop(i2)
-        result.append(dict(clusters))
-        ci += 1
+    # Algorithm description:
+    # 1. Random pick medoids
+    # 2. Update clusters
+    # 3. Update medoids
+    # 4. Repeat 2 and 3 for specified iterations
+    for num_clusters in range (2, ci + 1): # shall add one here
+        medoids_ = random.sample(range(0, ci), num_clusters)
+        clusters_ = []
+        # Specified iterations by users
+        for cur_iter in range(num_iters):
+            clusters_ = update_cluster(distance_matrix, medoids_, ci)
+            if (num_clusters > len(clusters_)):
+                print("debug:", num_clusters, len(clusters_), len(medoids_))
+                exit()
+            medoids_ = update_medoids(distance_matrix, clusters_, ci)
+
+        result.append(clusters_)
     return result
 
-def get_layer_clusters(result_clusters):
-    result = []
-    for layer in result_clusters:
-        cur_cluster = []
-        for label, cluster in layer.items():
-            cur_cluster.append(cluster)
-        if len(cur_cluster) > 1:
-            result.insert(0,cur_cluster)
-    return result
+def update_cluster(distance_matrix, medoids_, ci):
+    # select the nearest medoids for cur_p
+    clusters_map = {}
+    for med in medoids_:
+        clusters_map[med] = []
+    for p in range(ci):
+        min_dist = -1.0
+        select_med = -1
+        for m in medoids_:
+            if m == p:
+                select_med = m
+                break
+            if min_dist < 0 or distance_matrix[m][p] < min_dist:
+                min_dist = distance_matrix[m][p]
+                select_med = m
+        clusters_map[select_med].append(p)
 
-def cluster_score(distance_matrix, data_label, data_size):
+    # clean up and return lists
+    clusters_ = []
+    for key, values in clusters_map.items():
+        if len(values) > 0:
+            clusters_.append(sorted(values))
+        else:
+            print("crazy:", key)
+            for k in medoids_:
+                print(key, k, distance_matrix[key][k], distance_matrix[k][key])
+            exit()
+
+
+    if (len(clusters_) != len(medoids_)):
+        print("not same:", len(clusters_), len(medoids_))
+        exit()
+
+    return clusters_
+
+def update_medoids(distance_matrix, clusters_, ci):
+    # select the minimum distance to all others points in the same clusters
+    medoids_ = []
+    for cluster in clusters_:
+        target_med = -1
+        min_dist = -1.0
+        for pi in cluster:
+            cur_dist = 0.0
+            for pj in cluster:
+                cur_dist += distance_matrix[pi][pj]
+            if min_dist < 0 or cur_dist < min_dist:
+                min_dist = cur_dist
+                if pi < 0:
+                    print("warning:", pi, pj, min_dist, cur_dist)
+                target_med = pi
+        if target_med < 0:
+            print("med error:", pi, target_med, min_dist, cluster)
+            exit()
+
+        medoids_.append(target_med)
+    return medoids_
+
+
+
+def cluster_score(distance_matrix, data_label, data_size, num_iters = 10):
     '''
     # Performs cross validation on a gram matrix of training data and
     # returns the averaged accuracy scores.
@@ -118,8 +167,7 @@ def cluster_score(distance_matrix, data_label, data_size):
     # The number of folds is specified by the variable 'cv'.
     '''
     (distance_matrix) = convert_2_square_matrix(distance_matrix, data_size)
-    (clusterings) = get_hac_clusters(distance_matrix)
-    (clusterings) = get_layer_clusters(clusterings)
+    (clusterings) = get_k_medoids_clusters(distance_matrix, num_iters)
     scores = []
     for clusters in clusterings:
         (NMI, IY_C, HY, HC) = get_NMI_score(data_label, clusters, data_size)
@@ -130,7 +178,7 @@ def cluster_score(distance_matrix, data_label, data_size):
         print(str(len(clusters)) + "," + str(NMI)+ "," + str(IY_C_HY)+ "," + str(IY_C_HC) + "," + str(F) + "," + str(ARI))
         scores.insert(0, F)
 
-    return F
+    return scores
 
 def get_labels(clusters):
     total_elements = sum([len(cluster) for cluster in clusters]);
@@ -258,16 +306,20 @@ def get_NMI_score(global_data_labels, clusters, data_size):
 if __name__ == "__main__":
     if len(sys.argv) < 2:
         print("Please provide file name! ")
-        print("e.g. python3 parse_distance_hac_nmi.py your_distance.dm")
+        print("e.g. python3 parse_distance_nmi.py your_distance.dm your_desired_iterations(default: 10)")
         exit()
     filename = sys.argv[1]
     (dist_mat, data_label, size) = parse_distance_matrix(filename)
-    F = cluster_score(dist_mat, data_label, size)
+    if len(sys.argv) > 2:
+        score= cluster_score(dist_mat, data_label, size, int(sys.argv[2]))
+    else:
+        score= cluster_score(dist_mat, data_label, size)
+
 
     # Uncomment to check more information
-    # plt.plot(F, 'r-')
+    # plt.plot(score, 'r-')
     # plt.ylabel("NMI")
     # plt.xlabel("nclusters")
     # plt.show()
     #
-    # print(F)
+    # print(score)
