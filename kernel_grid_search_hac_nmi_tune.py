@@ -8,17 +8,6 @@ import numpy as np
 import sys
 from hac_ch import HAC_CH
 
-# --- Global Variables Declaration --- #
-global_gram_expression = {}
-global_data_labels = {}
-global_size = 0
-clusters = []
-cluster_labels = []
-global_filename = ""
-global global_nmi
-global global_I_HC1 # I/H_Y
-global global_I_HC2 # I/H_C
-
 def LOG_INFO(info):
     print("Info:" + str(info));
 
@@ -187,7 +176,7 @@ def innerP2distance(_gm, _size):
 
     return _dm
 
-def cluster_score(alpha=1., beta=0.): # change to NMI!
+def cluster_score(global_gram_expression, global_data_labels, data_size, register_n_cluster, alpha=1., beta=0.): # change to NMI!
     '''
     # Performs cross validation on a gram matrix of training data and
     # returns the averaged accuracy scores.
@@ -195,9 +184,9 @@ def cluster_score(alpha=1., beta=0.): # change to NMI!
     # The number of folds is specified by the variable 'cv'.
     '''
     # print("This is neg_cv_score, alpha = ", alpha, "beta = ", beta)
-    numpy_gm = get_gram_vals(global_gram_expression, global_size, alpha, beta)
+    numpy_gm = get_gram_vals(global_gram_expression, data_size, alpha, beta)
     gm = numpy_gm.tolist()
-    dm = innerP2distance(gm, global_size) # this is the pairwise distance matrix
+    dm = innerP2distance(gm, data_size) # this is the pairwise distance matrix
     if dm == None:
         print("Invalid dm obtained!")
         return -999.0,0,0,0
@@ -216,14 +205,9 @@ def cluster_score(alpha=1., beta=0.): # change to NMI!
         print(gm)
         print("alpha:", alpha, "beta:", beta);
         return -999.0,0,0,0;
-    # print("gm pass symmetric test")
-    global register_n_cluster
+
     hac_instance = HAC_CH(dm, gm)
     hac_instance.process_with_k(register_n_cluster)
-    # print("hac complete...")
-
-    global clusters
-    global cluster_labels
 
     clusters = hac_instance.get_clusters()
     nClusters = len(clusters)
@@ -232,13 +216,13 @@ def cluster_score(alpha=1., beta=0.): # change to NMI!
     nPos = 0
     nNeg = 0
     HY = 0
-    for ip in range(0, global_size):
+    for ip in range(0, data_size):
         if global_data_labels[ip] == '+1':
             nPos = nPos + 1
         else:
             nNeg = nNeg + 1
-    pPos = nPos/global_size
-    pNeg = nNeg/global_size
+    pPos = nPos/data_size
+    pNeg = nNeg/data_size
     H_Pos = 0
     H_Neg = 0
     if pPos > 0:
@@ -261,7 +245,7 @@ def cluster_score(alpha=1., beta=0.): # change to NMI!
                 nNeg = nNeg + 1
         pPos = nPos/nPoints
         pNeg = nNeg/nPoints
-        pC = nPoints/global_size
+        pC = nPoints/data_size
 
         H_Pos = 0
         H_Neg = 0
@@ -272,19 +256,10 @@ def cluster_score(alpha=1., beta=0.): # change to NMI!
 
         HY_C[ic] = pC*(H_Pos + H_Neg)
         HC = HC - pC*np.log2(pC)
-    #print(HC)
-    #print(HY_C)
+
     IY_C = HY - sum(HY_C)
-    #print(IY_C)
     NMI = 2*IY_C/(HY+HC)
-    global global_nmi
-    global_nmi = NMI
-    global global_I_HC1 # I/H_Y
-    global_I_HC1 = IY_C/HY;
-    global global_I_HC2
-    global_I_HC2 = IY_C/HC
-    #print('===============================')
-    #print(str(nClusters) + "," + str(NMI)+ "," + str(IY_C/HY)+ "," + str(IY_C/HC))
+
     return NMI, IY_C, HY, HC
 
 def save2file(F, alpha, beta, nClusters, ch_index, index_dict):
@@ -318,16 +293,6 @@ def assistFile(info, filename):
     fe.write(str(info) + "\r\n")
     fe.close()
 
-def register(gram_exp, data_label, size, filename):
-    global global_gram_expression
-    global global_data_labels
-    global global_size
-    global global_filename
-    global_gram_expression = gram_exp
-    global_data_labels = data_label
-    global_size = size
-    global_filename = filename
-
 if __name__ == '__main__':
     if len(sys.argv) < 2:
         print("Please provide file name! ")
@@ -342,7 +307,7 @@ if __name__ == '__main__':
         step_size = float(sys.argv[2])
 
     # --- My Parse Version (eval) --- #
-    (gram_exp, data_label, size1) = parse_gram_matrix(filename)
+    (gram_exp, data_label, data_size) = parse_gram_matrix(filename)
     #check_none(gram_exp, size1) # check if any expression not in the gram matrix
     # gram_vals = get_gram_vals(gram_exp, size1, 0.682164592364,0.394701288307)
     # dist_vals = innerP2distance(gram_vals, size1)
@@ -357,11 +322,7 @@ if __name__ == '__main__':
     # validate(gram_exp, size1, gram_exp_sympy, size2)
     # validate_vals(gram_vals, size1, gram_vals_sympy, size2)
 
-
-    # --- Register globally --- #
-    register(gram_exp, data_label, size1, filename)
-
-    for decided_n_cluster in range(2, size1+1):
+    for decided_n_cluster in range(2, data_size+1):
         global register_n_cluster
         register_n_cluster = decided_n_cluster
         # Grid Search
@@ -375,12 +336,12 @@ if __name__ == '__main__':
             while beta < 1.0:
                 if beta >= alpha:
                     break
-                (cur_score, IY_C, HY, HC) = cluster_score(alpha, beta)
+                (cur_score, IY_C, HY, HC) = cluster_score(gram_exp, data_label, data_size, decided_n_cluster, alpha, beta)
                 if cur_score > score:
                     score = cur_score
                     target_alpha = alpha
                     target_beta = beta
                 beta += step_size
             alpha += step_size
-
+        # format: alpha beta k nmi IY_C/HY IY_C/HC F-measure ARI
         print(str(register_n_cluster) + "," + str(score)+ "," + str(IY_C/HY)+ "," + str(IY_C/HC))
