@@ -7,6 +7,7 @@ import sympy
 import numpy as np
 import sys
 from hac_ch import HAC_CH
+from sklearn import metrics
 
 def LOG_INFO(info):
     print("Info:" + str(info));
@@ -210,6 +211,82 @@ def cluster_score(global_gram_expression, global_data_labels, data_size, registe
     hac_instance.process_with_k(register_n_cluster)
 
     clusters = hac_instance.get_clusters()
+    (NMI, IY_C, HY, HC) = get_NMI_score(global_data_labels, clusters, data_size)
+    (F) = get_fmeasure_score(global_data_labels, clusters, data_size)
+    (ARI) = get_rand_index(global_data_labels, clusters, data_size)
+    return NMI, float(IY_C)/HY, float(IY_C)/HC, F, ARI
+
+def get_labels(clusters):
+    total_elements = sum([len(cluster) for cluster in clusters]);
+    sets = [set(cluster) for cluster in clusters];
+    label_clusters = []
+    for i in range(total_elements):
+        for x,cur_set in enumerate(sets):
+            if i in cur_set:
+                label_clusters.append(x)
+                break;
+    return label_clusters
+
+def get_rand_index(global_data_labels, clusters, data_size):
+    cluster_true = [[],[]]
+    for i in range(0, data_size):
+        if global_data_labels[i] == "+1":
+            cluster_true[0].append(i)
+        else:
+            cluster_true[1].append(i)
+    if len(cluster_true[0]) == 0:
+        cluster_true.remove([])
+
+    label_clusters1 = get_labels(clusters)
+    label_clusters2 = get_labels(cluster_true)
+    score = metrics.adjusted_rand_score(label_clusters1, label_clusters2);
+
+    return score;
+
+def get_fmeasure_score(global_data_labels, clusters, data_size):
+    nClusters = len(clusters)
+    cluster_labels = [0 for x in range(nClusters)]
+    confusion_mat = [[0,0],[0,0]]
+    for ic in range(0, nClusters):
+        # print("For the ith cluster: ", ic)
+        nPoints = len(clusters[ic])
+        # print("     Number of points in current cluster: ", nPoints)
+        nPos = 0
+        nNeg = 0
+        for jc in range(0, nPoints):
+            if global_data_labels[clusters[ic][jc]] == "+1":
+                nPos = nPos + 1
+            else:
+                nNeg = nNeg + 1
+        # print("For i th cluster, +1 v.s. -1 is: ", ic, nPos, nNeg)
+        if nPos > nNeg:
+            cluster_labels[ic] = 1 # pos cluster
+            confusion_mat[1][1] = confusion_mat[1][1] + nPos # TP = confusion_mat[i][1][1]
+            confusion_mat[1][0] = confusion_mat[1][0] + nNeg # FN = confusion_mat[i][1][0]
+        else:
+            cluster_labels[ic] = -1 # neg cluster
+            confusion_mat[0][1] = confusion_mat[0][1] + nPos # FP = confusion_mat[i][0][1]
+            confusion_mat[0][0] = confusion_mat[0][0] + nNeg # TN = confusion_mat[i][0][0]
+
+    # then compute the score using the combined confusion matrix, e.g. use accuracy.
+    TN = confusion_mat[0][0]
+    FP = confusion_mat[0][1]
+    FN = confusion_mat[1][0]
+    TP = confusion_mat[1][1]
+    # accuracy = (confusion_mat_sum[0][0]+confusion_mat_sum[1][1])/(confusion_mat_sum[0][0]+confusion_mat_sum[0][1]+confusion_mat_sum[1][0]+confusion_mat_sum[1][1])
+    # print("Final accuracy for this set of parameter is: ", accuracy)
+    # print("debug confusion: ", TN, FP, FN, TP)
+    if FN+TP == 0:
+        return 0
+    TPR = TP/(FN+TP)
+    if TP+FP == 0:
+        return 0
+    Precision = TP/(TP+FP)
+    F = 2*(Precision*TPR)/(Precision+TPR)
+
+    return F
+
+def get_NMI_score(global_data_labels, clusters, data_size):
     nClusters = len(clusters)
     cluster_labels = [0 for x in range(nClusters)]
 
@@ -328,7 +405,7 @@ if __name__ == '__main__':
         # Grid Search
         alpha = 0.0
         beta = 0.0
-        score = -998.0
+        NMI = -998.0
         target_alpha = -1.0
         target_beta = -1.0
 
@@ -336,12 +413,12 @@ if __name__ == '__main__':
             while beta < 1.0:
                 if beta >= alpha:
                     break
-                (cur_score, IY_C, HY, HC) = cluster_score(gram_exp, data_label, data_size, decided_n_cluster, alpha, beta)
-                if cur_score > score:
-                    score = cur_score
+                (cur_NMI, IY_C_HY, IY_C_HC, F, ARI) = cluster_score(gram_exp, data_label, data_size, decided_n_cluster, alpha, beta)
+                if cur_NMI > NMI:
+                    NMI = cur_NMI
                     target_alpha = alpha
                     target_beta = beta
                 beta += step_size
             alpha += step_size
         # format: alpha beta k nmi IY_C/HY IY_C/HC F-measure ARI
-        print(str(register_n_cluster) + "," + str(score)+ "," + str(IY_C/HY)+ "," + str(IY_C/HC))
+        print(str(alpha) + "," + str(beta) + "," + str(register_n_cluster) + "," + str(NMI)+ "," + str(IY_C_HY)+ "," + str(IY_C_HC) + "," + str(F) + "," + str(ARI))
