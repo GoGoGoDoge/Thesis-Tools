@@ -110,69 +110,150 @@ def get_layer_clusters(result_clusters):
             result.insert(0,cur_cluster)
     return result
 
-def cluster_score(distance_matrix, data_label, size):
+def cluster_score(distance_matrix, data_label, data_size):
     '''
     # Performs cross validation on a gram matrix of training data and
     # returns the averaged accuracy scores.
     # The gram matrix 'gm' is generated from 'get_elmnt'.
     # The number of folds is specified by the variable 'cv'.
     '''
-    (distance_matrix) = convert_2_square_matrix(distance_matrix,size)
+    (distance_matrix) = convert_2_square_matrix(distance_matrix, data_size)
     (clusterings) = get_hac_clusters(distance_matrix)
     (clusterings) = get_layer_clusters(clusterings)
     scores = []
     for clusters in clusterings:
-        nClusters = len(clusters)
-        nPos = 0.0
-        nNeg = 0.0
-        HY = 0
-        for ip in range(0, size):
-            if data_label[ip] == '+1':
+        (NMI, IY_C, HY, HC) = get_NMI_score(data_label, clusters, data_size)
+        IY_C_HY = float(IY_C)/HY
+        IY_C_HC = float(IY_C)/HC
+        (F) = get_fmeasure_score(data_label, clusters, data_size)
+        (ARI) = get_rand_index(data_label, clusters, data_size)
+        print(str(len(clusters)) + "," + str(NMI)+ "," + str(IY_C_HY)+ "," + str(IY_C_HC) + "," + str(F) + "," + str(ARI))
+        scores.insert(0, F)
+
+    return F
+
+def get_labels(clusters):
+    total_elements = sum([len(cluster) for cluster in clusters]);
+    sets = [set(cluster) for cluster in clusters];
+    label_clusters = []
+    for i in range(total_elements):
+        for x,cur_set in enumerate(sets):
+            if i in cur_set:
+                label_clusters.append(x)
+                break;
+    return label_clusters
+
+def get_rand_index(global_data_labels, clusters, data_size):
+    cluster_true = [[],[]]
+    for i in range(0, data_size):
+        if global_data_labels[i] == "+1":
+            cluster_true[0].append(i)
+        else:
+            cluster_true[1].append(i)
+    if len(cluster_true[0]) == 0:
+        cluster_true.remove([])
+
+    label_clusters1 = get_labels(clusters)
+    label_clusters2 = get_labels(cluster_true)
+    score = metrics.adjusted_rand_score(label_clusters1, label_clusters2);
+
+    return score;
+
+def get_fmeasure_score(global_data_labels, clusters, data_size):
+    nClusters = len(clusters)
+    cluster_labels = [0 for x in range(nClusters)]
+    confusion_mat = [[0,0],[0,0]]
+    for ic in range(0, nClusters):
+        # print("For the ith cluster: ", ic)
+        nPoints = len(clusters[ic])
+        # print("     Number of points in current cluster: ", nPoints)
+        nPos = 0
+        nNeg = 0
+        for jc in range(0, nPoints):
+            if global_data_labels[clusters[ic][jc]] == "+1":
                 nPos = nPos + 1
             else:
                 nNeg = nNeg + 1
-        pPos = nPos/size
-        pNeg = nNeg/size
+        # print("For i th cluster, +1 v.s. -1 is: ", ic, nPos, nNeg)
+        if nPos > nNeg:
+            cluster_labels[ic] = 1 # pos cluster
+            confusion_mat[1][1] = confusion_mat[1][1] + nPos # TP = confusion_mat[i][1][1]
+            confusion_mat[1][0] = confusion_mat[1][0] + nNeg # FN = confusion_mat[i][1][0]
+        else:
+            cluster_labels[ic] = -1 # neg cluster
+            confusion_mat[0][1] = confusion_mat[0][1] + nPos # FP = confusion_mat[i][0][1]
+            confusion_mat[0][0] = confusion_mat[0][0] + nNeg # TN = confusion_mat[i][0][0]
+
+    # then compute the score using the combined confusion matrix, e.g. use accuracy.
+    TN = confusion_mat[0][0]
+    FP = confusion_mat[0][1]
+    FN = confusion_mat[1][0]
+    TP = confusion_mat[1][1]
+    # accuracy = (confusion_mat_sum[0][0]+confusion_mat_sum[1][1])/(confusion_mat_sum[0][0]+confusion_mat_sum[0][1]+confusion_mat_sum[1][0]+confusion_mat_sum[1][1])
+    # print("Final accuracy for this set of parameter is: ", accuracy)
+    # print("debug confusion: ", TN, FP, FN, TP)
+    if FN+TP == 0:
+        return 0
+    TPR = TP/(FN+TP)
+    if TP+FP == 0:
+        return 0
+    Precision = TP/(TP+FP)
+    F = 2*(Precision*TPR)/(Precision+TPR)
+
+    return F
+
+def get_NMI_score(global_data_labels, clusters, data_size):
+    nClusters = len(clusters)
+    cluster_labels = [0 for x in range(nClusters)]
+
+    nPos = 0
+    nNeg = 0
+    HY = 0
+    for ip in range(0, data_size):
+        if global_data_labels[ip] == '+1':
+            nPos = nPos + 1
+        else:
+            nNeg = nNeg + 1
+    pPos = nPos/data_size
+    pNeg = nNeg/data_size
+    H_Pos = 0
+    H_Neg = 0
+    if pPos > 0:
+        H_Pos = -pPos*np.log2(pPos)
+    if pNeg > 0:
+        H_Neg = -pNeg*np.log2(pNeg)
+    HY = H_Pos + H_Neg
+    #print(HY)
+    HY_C = [0 for i in range(nClusters)]
+    HC = 0
+    for ic in range(0, nClusters):
+        nPoints = len(clusters[ic])
+
+        nPos = 0
+        nNeg = 0
+        for jc in range(0, nPoints):
+            if global_data_labels[clusters[ic][jc]] == "+1":
+                nPos = nPos + 1
+            else:
+                nNeg = nNeg + 1
+        pPos = nPos/nPoints
+        pNeg = nNeg/nPoints
+        pC = nPoints/data_size
+
         H_Pos = 0
         H_Neg = 0
         if pPos > 0:
             H_Pos = -pPos*np.log2(pPos)
         if pNeg > 0:
             H_Neg = -pNeg*np.log2(pNeg)
-        HY = H_Pos + H_Neg
-        #print(HY)
-        HY_C = [0 for i in range(nClusters)]
-        HC = 0
-        for ic in range(0, nClusters):
-            nPoints = len(clusters[ic])
-            nPos = 0.0
-            nNeg = 0.0
-            for jc in range(0, nPoints):
-                if data_label[clusters[ic][jc]] == "+1":
-                    nPos = nPos + 1
-                else:
-                    nNeg = nNeg + 1
-            pPos = nPos/nPoints
-            pNeg = nNeg/nPoints
-            pC = float(nPoints)/size
 
-            if pPos > 0:
-                H_Pos = -pPos*np.log2(pPos)
-            if pNeg > 0:
-                H_Neg = -pNeg*np.log2(pNeg)
-            # Advise by Feng, remove negative sign
-            HY_C[ic] = pC*(H_Pos + H_Neg)
-            HC = HC - pC*np.log2(float(pC))
-        #print(HC)
-        #print(HY_C)
-        IY_C = HY - sum(HY_C)
-        #print(IY_C)
-        score = 2*IY_C/(HY+HC)
-        # print(nClusters, score)
-        print(str(nClusters) + "," + str(score)+ "," + str(IY_C/HY)+ "," + str(IY_C/HC))
-        scores.insert(0, score)
+        HY_C[ic] = pC*(H_Pos + H_Neg)
+        HC = HC - pC*np.log2(pC)
 
-    return scores
+    IY_C = HY - sum(HY_C)
+    NMI = 2*IY_C/(HY+HC)
+
+    return NMI, IY_C, HY, HC
 
 if __name__ == "__main__":
     if len(sys.argv) < 2:
