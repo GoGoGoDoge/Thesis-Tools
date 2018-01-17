@@ -421,4 +421,4 @@ if __name__ == '__main__':
                 beta += step_size
             alpha += step_size
         # format: alpha beta k nmi IY_C/HY IY_C/HC F-measure ARI
-        print(str(alpha) + "," + str(beta) + "," + str(register_n_cluster) + "," + str(NMI)+ "," + str(IY_C_HY)+ "," + str(IY_C_HC) + "," + str(F) + "," + str(ARI))
+        print(str(target_alpha) + "," + str(target_beta) + "," + str(register_n_cluster) + "," + str(NMI)+ "," + str(IY_C_HY)+ "," + str(IY_C_HC) + "," + str(F) + "," + str(ARI))
