@@ -405,20 +405,29 @@ if __name__ == '__main__':
         # Grid Search
         alpha = 0.0
         beta = 0.0
-        NMI = -998.0
+        target_NMI = -998.0
         target_alpha = -1.0
         target_beta = -1.0
+        target_IY_C_HY = -999.0
+        target_IY_C_HC = -999.0
+        target_F = -999.0
+        target_ARI = -999.0
+
 
         while alpha < 1.0:
             while beta < 1.0:
                 if beta >= alpha:
                     break
-                (cur_NMI, IY_C_HY, IY_C_HC, F, ARI) = cluster_score(gram_exp, data_label, data_size, decided_n_cluster, alpha, beta)
-                if cur_NMI > NMI:
-                    NMI = cur_NMI
+                (cur_NMI, cur_IY_C_HY, cur_IY_C_HC, cur_F, cur_ARI) = cluster_score(gram_exp, data_label, data_size, decided_n_cluster, alpha, beta)
+                if cur_NMI > target_NMI:
+                    target_NMI = cur_NMI
                     target_alpha = alpha
                     target_beta = beta
+                    target_IY_C_HY = cur_IY_C_HY
+                    target_IY_C_HC = cur_IY_C_HC
+                    target_F = cur_F
+                    target_ARI = cur_ARI
                 beta += step_size
             alpha += step_size
         # format: alpha beta k nmi IY_C/HY IY_C/HC F-measure ARI
-        print(str(target_alpha) + "," + str(target_beta) + "," + str(register_n_cluster) + "," + str(NMI)+ "," + str(IY_C_HY)+ "," + str(IY_C_HC) + "," + str(F) + "," + str(ARI))
+        print(str(target_alpha) + "," + str(target_beta) + "," + str(register_n_cluster) + "," + str(target_NMI)+ "," + str(target_IY_C_HY)+ "," + str(target_IY_C_HC) + "," + str(target_F) + "," + str(target_ARI))
