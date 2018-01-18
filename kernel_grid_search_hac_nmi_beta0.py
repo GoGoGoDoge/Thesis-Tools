@@ -420,7 +420,7 @@ if __name__ == '__main__':
     # validate(gram_exp, size1, gram_exp_sympy, size2)
     # validate_vals(gram_vals, size1, gram_vals_sympy, size2)
 
-    for decided_n_cluster in range(0, min(data_size+1, 29)):
+    for decided_n_cluster in range(0, min(data_size+1, 50)):
         register_n_cluster = decided_n_cluster
         # Grid Search
         alpha = 0.0
