@@ -207,6 +207,9 @@ def cluster_score(global_gram_expression, global_data_labels, data_size, registe
         print("alpha:", alpha, "beta:", beta);
         return -999.0,0,0,0;
 
+    #Add Randomize
+    (dm,gm, global_data_labels) = randomize(dm, gm, data_size, global_data_labels)
+
     hac_instance = HAC_CH(dm, gm)
     hac_instance.process_with_k(register_n_cluster)
 
@@ -215,6 +218,23 @@ def cluster_score(global_gram_expression, global_data_labels, data_size, registe
     (F) = get_fmeasure_score(global_data_labels, clusters, data_size)
     (ARI) = get_rand_index(global_data_labels, clusters, data_size)
     return NMI, float(IY_C)/HY, float(IY_C)/HC, F, ARI
+
+def randomize(dm, gm, data_size, global_data_labels):
+    random_map = random.sample(range(0, data_size), data_size)
+    new_dm = []
+    new_gm = []
+    new_data_labels = []
+    for i in range(0, data_size):
+        new_dm.append([])
+        new_gm.append([])
+        new_data_labels.append(global_data_labels[random_map[i]])
+        for j in range(0, data_size):
+            new_dm[i].append(dm[random_map[i]][random_map[j]])
+            new_gm[i].append(gm[random_map[i]][random_map[j]])
+    # for i in range(0, data_size):
+    #     print(i, random_map[i], global_data_labels[i], new_data_labels[i])
+    # exit()
+    return new_dm, new_gm, new_data_labels
 
 def get_labels(clusters):
     total_elements = sum([len(cluster) for cluster in clusters]);
@@ -399,7 +419,7 @@ if __name__ == '__main__':
     # validate(gram_exp, size1, gram_exp_sympy, size2)
     # validate_vals(gram_vals, size1, gram_vals_sympy, size2)
 
-    for decided_n_cluster in range(2, data_size+1):
+    for decided_n_cluster in range(2, min(51,data_size+1)):
         global register_n_cluster
         register_n_cluster = decided_n_cluster
         # Grid Search
