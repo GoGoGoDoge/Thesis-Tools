@@ -8,6 +8,7 @@ import numpy as np
 import sys
 from hac_ch import HAC_CH
 from sklearn import metrics
+import random
 
 def LOG_INFO(info):
     print("Info:" + str(info));
@@ -449,5 +450,6 @@ if __name__ == '__main__':
                     target_ARI = cur_ARI
                 beta += step_size
             alpha += step_size
+            beta = 0.0
         # format: alpha beta k nmi IY_C/HY IY_C/HC F-measure ARI
         print(str(target_alpha) + "," + str(target_beta) + "," + str(register_n_cluster) + "," + str(target_NMI)+ "," + str(target_IY_C_HY)+ "," + str(target_IY_C_HC) + "," + str(target_F) + "," + str(target_ARI))

@@ -85,13 +85,22 @@ def get_gram_vals (gram_exp, size, alpha, beta, is_sympy = False):
                 value_exp = re.sub(r'x', str(alpha), expression)
                 value_exp = re.sub(r'y', str(beta), value_exp)
                 value_exp = re.sub(r'\^', r'**', value_exp)
-                value = eval(value_exp)
+                # value = eval(value_exp)
+                value = longEval(value_exp)
             if isNaN(value):
                 print("Fatal Error: ", i, j, value);
                 exit()
             gram_value[i,j] = value
 
     return gram_value
+
+def longEval(input):
+    expressions = input.split("+")
+    val = 0.0
+    # print(input)
+    for expression in expressions:
+        val += eval(expression)
+    return val
 
 def output2file(gram_value, filename):
     np.savetxt(filename, gram_value)
@@ -420,7 +429,7 @@ if __name__ == '__main__':
     # validate(gram_exp, size1, gram_exp_sympy, size2)
     # validate_vals(gram_vals, size1, gram_vals_sympy, size2)
 
-    for decided_n_cluster in range(2, min(data_size+1, 50)):
+    for decided_n_cluster in range(2, min(data_size+1, 51)):
         register_n_cluster = decided_n_cluster
         # Grid Search
         alpha = 0.0
