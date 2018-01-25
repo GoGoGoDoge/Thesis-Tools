@@ -82,7 +82,8 @@ def get_gram_vals (gram_exp, size, alpha, beta, is_sympy = False):
             if is_sympy:
                 value = gram_exp[index].subs([('x', alpha), ('y', beta)])
             else:
-                value_exp = re.sub(r'x', str(alpha), expression)
+                value_exp = re.sub(r'e\+', "*10**", expression)
+                value_exp = re.sub(r'x', str(alpha), value_exp)
                 value_exp = re.sub(r'y', str(beta), value_exp)
                 value_exp = re.sub(r'\^', r'**', value_exp)
                 # value = eval(value_exp)
