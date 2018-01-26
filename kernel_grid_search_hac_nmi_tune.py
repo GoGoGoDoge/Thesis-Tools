@@ -3,7 +3,7 @@ I write this function to parse gram matrix and reconstruct the program for parsi
 """
 import os
 import re
-import sympy
+# import sympy
 import numpy as np
 import sys
 from hac_ch import HAC_CH
@@ -188,17 +188,17 @@ def innerP2distance(_gm, _size):
 
     return _dm
 
-def cluster_score(global_gram_expression, global_data_labels, data_size, register_n_cluster, alpha=1., beta=0.): # change to NMI!
+def cluster_score(gm, dm, global_data_labels, data_size, register_n_cluster, alpha=1., beta=0.): # change to NMI!
     '''
     # Performs cross validation on a gram matrix of training data and
     # returns the averaged accuracy scores.
     # The gram matrix 'gm' is generated from 'get_elmnt'.
     # The number of folds is specified by the variable 'cv'.
     '''
+    #Add Randomize
+    # (dm,gm, global_data_labels) = randomize(dm, gm, data_size, global_data_labels)
+
     # print("This is neg_cv_score, alpha = ", alpha, "beta = ", beta)
-    numpy_gm = get_gram_vals(global_gram_expression, data_size, alpha, beta)
-    gm = numpy_gm.tolist()
-    dm = innerP2distance(gm, data_size) # this is the pairwise distance matrix
     if dm == None:
         print("Invalid dm obtained!")
         return -999.0,0,0,0
@@ -217,9 +217,6 @@ def cluster_score(global_gram_expression, global_data_labels, data_size, registe
         print(gm)
         print("alpha:", alpha, "beta:", beta);
         return -999.0,0,0,0;
-
-    #Add Randomize
-    (dm,gm, global_data_labels) = randomize(dm, gm, data_size, global_data_labels)
 
     hac_instance = HAC_CH(dm, gm)
     hac_instance.process_with_k(register_n_cluster)
@@ -404,15 +401,21 @@ def assistFile(info, filename):
 if __name__ == '__main__':
     if len(sys.argv) < 2:
         print("Please provide file name! ")
-        print("e.g. python3 kernel_grid_search_hac_nmi_tune.py your_kernel.kernel your_desired_step_size(default: 0.01)")
+        print("e.g. python3 kernel_grid_search_hac_nmi_tune.py your_kernel.kernel your_option_tuned_beta0(default: false) your_desired_step_size(default: 0.01)")
         exit()
     filename = sys.argv[1]
-    step_size = 0.01
+
+    beta0_tuned_trigger = False
     if len(sys.argv) > 2:
-        if float(sys.argv[2]) < 0:
+        if str(sys.argv[2]).lower() == "yes":
+            beta0_tuned_trigger = True
+
+    step_size = 0.01
+    if len(sys.argv) > 3:
+        if float(sys.argv[3]) < 0:
             print("Step size cannot be negative number!")
             exit()
-        step_size = float(sys.argv[2])
+        step_size = float(sys.argv[3])
 
     # --- My Parse Version (eval) --- #
     (gram_exp, data_label, data_size) = parse_gram_matrix(filename)
@@ -430,36 +433,40 @@ if __name__ == '__main__':
     # validate(gram_exp, size1, gram_exp_sympy, size2)
     # validate_vals(gram_vals, size1, gram_vals_sympy, size2)
 
-    for decided_n_cluster in range(2, min(51,data_size+1)):
-        global register_n_cluster
-        register_n_cluster = decided_n_cluster
-        # Grid Search
-        alpha = 0.0
+    # A map data structure to store final results
+    # Key: # of clusters, Value: scores / printable strings
+    best_nmi_scores = {}
+    best_nmi_results = {}
+    for pre_n_cluster in range(2, min(51, data_size+1)):
+        best_nmi_scores[pre_n_cluster] = -999.0
+        best_nmi_results[pre_n_cluster] = ""
+
+    alpha = 0.0
+    beta = 0.0
+    while alpha < 1.0:
         beta = 0.0
-        target_NMI = -998.0
-        target_alpha = -1.0
-        target_beta = -1.0
-        target_IY_C_HY = -999.0
-        target_IY_C_HC = -999.0
-        target_F = -999.0
-        target_ARI = -999.0
+        while beta < 1.0:
+            if beta >= alpha:
+                break
+            # Step 1: parse the gram expression first
+            numpy_gm = get_gram_vals(gram_exp, data_size, alpha, beta)
+            gm = numpy_gm.tolist()
+            dm = innerP2distance(gm, data_size) # this is the pairwise distance matrix
+            (dm, gm, random_data_label) = randomize(dm, gm, data_size, data_label)
 
+            # Step 2: calculate the NMI score if it is best
+            for decided_n_cluster in range(2, min(51,data_size+1)):
+                (cur_NMI, cur_IY_C_HY, cur_IY_C_HC, cur_F, cur_ARI) = cluster_score(gm, dm, random_data_label, data_size, decided_n_cluster, alpha, beta)
+                cur_result = str(alpha) + "," + str(beta) + "," + str(decided_n_cluster) + "," + str(cur_NMI)+ "," + str(cur_IY_C_HY)+ "," + str(cur_IY_C_HC) + "," + str(cur_F) + "," + str(cur_ARI)
+                if best_nmi_scores[decided_n_cluster] < float(cur_NMI):
+                    best_nmi_scores[decided_n_cluster] = float(cur_NMI)
+                    best_nmi_results[decided_n_cluster] = cur_result
+            # Step 3: if not tuned beta0 just skipped tunning
+            if not beta0_tuned_trigger:
+                break
+            beta += step_size
+        alpha += step_size
+        # print("Progress: " + str(alpha))
 
-        while alpha < 1.0:
-            while beta < 1.0:
-                if beta >= alpha:
-                    break
-                (cur_NMI, cur_IY_C_HY, cur_IY_C_HC, cur_F, cur_ARI) = cluster_score(gram_exp, data_label, data_size, decided_n_cluster, alpha, beta)
-                if cur_NMI > target_NMI:
-                    target_NMI = cur_NMI
-                    target_alpha = alpha
-                    target_beta = beta
-                    target_IY_C_HY = cur_IY_C_HY
-                    target_IY_C_HC = cur_IY_C_HC
-                    target_F = cur_F
-                    target_ARI = cur_ARI
-                beta += step_size
-            alpha += step_size
-            beta = 0.0
-        # format: alpha beta k nmi IY_C/HY IY_C/HC F-measure ARI
-        print(str(target_alpha) + "," + str(target_beta) + "," + str(register_n_cluster) + "," + str(target_NMI)+ "," + str(target_IY_C_HY)+ "," + str(target_IY_C_HC) + "," + str(target_F) + "," + str(target_ARI))
+    for decided_n_cluster in range(2, min(51,data_size+1)):
+        print(best_nmi_results[decided_n_cluster])
