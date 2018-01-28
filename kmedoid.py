@@ -17,7 +17,7 @@ class KMedoid:
         return self.__result_clusters;
 
     def get_k_medoids_clusters(self, distance_matrix, num_iters, num_clusters):
-        result = []
+        # result = []
         ci = len(distance_matrix)
         # Algorithm description:
         # 1. Random pick medoids
@@ -34,7 +34,8 @@ class KMedoid:
                 exit()
             medoids_ = self.update_medoids(distance_matrix, clusters_, ci)
 
-        result.append(clusters_)
+        # result.append(clusters_)
+        result = clusters_
         return result
 
     def update_cluster(self, distance_matrix, medoids_, ci):
