@@ -424,7 +424,7 @@ if __name__ == '__main__':
 
     alpha = 0.0
     beta = 0.0
-    while alpha < 1.0:
+    while alpha <= 1.0:
         beta = 0.0
         while beta < 1.0:
             if beta >= alpha:
