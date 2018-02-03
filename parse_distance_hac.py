@@ -118,6 +118,7 @@ def cluster_score(distance_matrix, data_label, data_size):
     # The number of folds is specified by the variable 'cv'.
     '''
     (distance_matrix) = convert_2_square_matrix(distance_matrix, data_size)
+    (distance_matrix, data_label) = randomize(distance_matrix, data_size, data_label)
     (clusterings) = get_hac_clusters(distance_matrix)
     (clusterings) = get_layer_clusters(clusterings)
     scores = []
@@ -255,6 +256,20 @@ def get_NMI_score(global_data_labels, clusters, data_size):
 
     return NMI, IY_C, HY, HC
 
+def randomize(dm, data_size, global_data_labels):
+    random_map = random.sample(range(0, data_size), data_size)
+    new_dm = []
+    new_data_labels = []
+    for i in range(0, data_size):
+        new_dm.append([])
+        new_data_labels.append(global_data_labels[random_map[i]])
+        for j in range(0, data_size):
+            new_dm[i].append(dm[random_map[i]][random_map[j]])
+    # for i in range(0, data_size):
+    #     print(i, random_map[i], global_data_labels[i], new_data_labels[i])
+    # exit()
+    return new_dm, new_data_labels
+
 if __name__ == "__main__":
     if len(sys.argv) < 2:
         print("Please provide file name! ")
@@ -262,6 +277,7 @@ if __name__ == "__main__":
         exit()
     filename = sys.argv[1]
     (dist_mat, data_label, size) = parse_distance_matrix(filename)
+
     F = cluster_score(dist_mat, data_label, size)
 
     # Uncomment to check more information
