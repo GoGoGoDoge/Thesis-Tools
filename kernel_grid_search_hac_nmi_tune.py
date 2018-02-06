@@ -9,6 +9,7 @@ import sys
 from hac_ch import HAC_CH
 from sklearn import metrics
 import random
+import math
 
 def LOG_INFO(info):
     print("Info:" + str(info));
@@ -417,6 +418,14 @@ if __name__ == '__main__':
             exit()
         step_size = float(sys.argv[3])
 
+    degree = 1 # default value
+    if len(sys.argv) > 4:
+        if int(sys.argv[4]) <= 0:
+            print("Degree cannot be negative number or zero!")
+        degree = int(sys.argv[4]) # parse the degree
+
+    tunable_k = 51
+
     # --- My Parse Version (eval) --- #
     (gram_exp, data_label, data_size) = parse_gram_matrix(filename)
     #check_none(gram_exp, size1) # check if any expression not in the gram matrix
@@ -437,7 +446,7 @@ if __name__ == '__main__':
     # Key: # of clusters, Value: scores / printable strings
     best_nmi_scores = {}
     best_nmi_results = {}
-    for pre_n_cluster in range(2, min(51, data_size+1)):
+    for pre_n_cluster in range(2, min(tunable_k, data_size+1)):
         best_nmi_scores[pre_n_cluster] = -999.0
         best_nmi_results[pre_n_cluster] = ""
 
@@ -449,14 +458,16 @@ if __name__ == '__main__':
             if beta >= alpha:
                 break
             # Step 1: parse the gram expression first
+            alpha = math.pow(alpha, degree)
+            beta = math.pow(beta, degree)
             numpy_gm = get_gram_vals(gram_exp, data_size, alpha, beta)
             gm = numpy_gm.tolist()
             dm = innerP2distance(gm, data_size) # this is the pairwise distance matrix
-            (dm, gm, random_data_label) = randomize(dm, gm, data_size, data_label)
+            #(dm, gm, random_data_label) = randomize(dm, gm, data_size, data_label)
 
             # Step 2: calculate the NMI score if it is best
-            for decided_n_cluster in range(2, min(51,data_size+1)):
-                (cur_NMI, cur_IY_C_HY, cur_IY_C_HC, cur_F, cur_ARI) = cluster_score(gm, dm, random_data_label, data_size, decided_n_cluster, alpha, beta)
+            for decided_n_cluster in range(2, min(tunable_k,data_size+1)):
+                (cur_NMI, cur_IY_C_HY, cur_IY_C_HC, cur_F, cur_ARI) = cluster_score(gm, dm, data_label, data_size, decided_n_cluster, alpha, beta)
                 cur_result = str(alpha) + "," + str(beta) + "," + str(decided_n_cluster) + "," + str(cur_NMI)+ "," + str(cur_IY_C_HY)+ "," + str(cur_IY_C_HC) + "," + str(cur_F) + "," + str(cur_ARI)
                 if best_nmi_scores[decided_n_cluster] < float(cur_NMI):
                     best_nmi_scores[decided_n_cluster] = float(cur_NMI)
@@ -468,5 +479,5 @@ if __name__ == '__main__':
         alpha += step_size
         # print("Progress: " + str(alpha))
 
-    for decided_n_cluster in range(2, min(51,data_size+1)):
+    for decided_n_cluster in range(2, min(tunable_k ,data_size+1)):
         print(best_nmi_results[decided_n_cluster])
