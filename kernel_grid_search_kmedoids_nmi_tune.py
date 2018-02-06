@@ -440,9 +440,9 @@ if __name__ == '__main__':
             if beta >= alpha:
                 break
             # Step 1: parse the gram expression first
-            alpha = math.pow(alpha, degree)
-            beta = math.pow(beta, degree)
-            numpy_gm = get_gram_vals(gram_exp, data_size, alpha, beta)
+            degree_alpha = math.pow(alpha, degree)
+            degree_beta = math.pow(beta, degree)
+            numpy_gm = get_gram_vals(gram_exp, data_size, degree_alpha, degree_beta)
             gm = numpy_gm.tolist()
             dm = innerP2distance(gm, data_size) # this is the pairwise distance matrix
             #(dm, gm, random_data_label) = randomize(dm, gm, data_size, data_label)
