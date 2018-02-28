@@ -1,5 +1,12 @@
 # ignore directory
 /__pycache__/
+/csv/
+/bash/
+/kmedoid_csv/
 
 # ignore .pyc type
 *.pyc
+*.zip
+
+# ignore specific file
+.DS_Store
