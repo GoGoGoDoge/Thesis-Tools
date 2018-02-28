@@ -1,15 +1,12 @@
-"""
-I write this function to parse gram matrix and reconstruct the program for parsing GP
-"""
 import os
 import re
-# import sympy
-import numpy as np
 import sys
-from hac_ch import HAC_CH
+import sympy
+import numpy as np
+
+from scipy import linalg
+
 from sklearn import metrics
-import random
-import math
 
 def LOG_INFO(info):
     print("Info:" + str(info));
@@ -196,22 +193,18 @@ def cluster_score(gm, dm, global_data_labels, data_size, register_n_cluster, alp
     # The gram matrix 'gm' is generated from 'get_elmnt'.
     # The number of folds is specified by the variable 'cv'.
     '''
-    #Add Randomize
-    # (dm,gm, global_data_labels) = randomize(dm, gm, data_size, global_data_labels)
 
-    # print("This is neg_cv_score, alpha = ", alpha, "beta = ", beta)
-
-    # if dm == None:
-    #     print("Invalid dm obtained!")
-    #     return -999.0,0,0,0
-    # confusion_mat = [[0,0],[0,0]]
-    # (symmetric, row, col) = is_symmetric(dm);
-    # if symmetric == False:
-    #     print("distance matrix:", row, col)
-    #     print(dm)
-    #     print("alpha:", alpha, "beta:", beta);
-    #     return -999.0,0,0,0;
-    # # print("dm pass symmetric test")
+    if dm == None:
+        print("Invalid dm obtained!")
+        return -999.0,0,0,0
+    confusion_mat = [[0,0],[0,0]]
+    (symmetric, row, col) = is_symmetric(dm);
+    if symmetric == False:
+        print("distance matrix:", row, col)
+        print(dm)
+        print("alpha:", alpha, "beta:", beta);
+        return -999.0,0,0,0;
+    # print("dm pass symmetric test")
 
     (symmetric, row, col) = is_symmetric(gm);
     if symmetric == False:
@@ -220,31 +213,36 @@ def cluster_score(gm, dm, global_data_labels, data_size, register_n_cluster, alp
         print("alpha:", alpha, "beta:", beta);
         return -999.0,0,0,0;
 
-    hac_instance = HAC_CH(dm, gm)
-    hac_instance.process_with_k(register_n_cluster)
+    E, V = linalg.eigh(gm)
+    E_abs = np.absolute(E)
+    kk = register_n_cluster
+    ascentIdx = np.argsort(E_abs)
 
-    clusters = hac_instance.get_clusters()
+    idxForCluster = ascentIdx[-kk:]
+
+    clusters_old = [ [] for i in range(0,kk) ]
+
+    tempArr = [0 for i in range(0,kk)]
+    for i in range(0,data_size):
+        for j in range(0,kk):
+            tempArr[j] = np.abs(V[i,idxForCluster[j]])
+        #print(tempArr)
+        clusterIdx = np.argmax(tempArr)
+        clusters_old[clusterIdx].append(i)
+    clusters = []
+    for i in range(0,len(clusters_old)):
+        if len(clusters_old[i])>0:
+            clusters.append(clusters_old[i])
+
+    #print(clusters)
+
+
     (NMI, IY_C, HY, HC) = get_NMI_score(global_data_labels, clusters, data_size)
     (F) = get_fmeasure_score(global_data_labels, clusters, data_size)
     (ARI) = get_rand_index(global_data_labels, clusters, data_size)
     return NMI, float(IY_C)/HY, float(IY_C)/HC, F, ARI
 
-def randomize(dm, gm, data_size, global_data_labels):
-    random_map = random.sample(range(0, data_size), data_size)
-    new_dm = []
-    new_gm = []
-    new_data_labels = []
-    for i in range(0, data_size):
-        new_dm.append([])
-        new_gm.append([])
-        new_data_labels.append(global_data_labels[random_map[i]])
-        for j in range(0, data_size):
-            new_dm[i].append(dm[random_map[i]][random_map[j]])
-            new_gm[i].append(gm[random_map[i]][random_map[j]])
-    # for i in range(0, data_size):
-    #     print(i, random_map[i], global_data_labels[i], new_data_labels[i])
-    # exit()
-    return new_dm, new_gm, new_data_labels
+
 
 def get_labels(clusters):
     total_elements = sum([len(cluster) for cluster in clusters]);
@@ -317,6 +315,7 @@ def get_fmeasure_score(global_data_labels, clusters, data_size):
     return F
 
 def get_NMI_score(global_data_labels, clusters, data_size):
+    #clusters.remove([])
     nClusters = len(clusters)
     cluster_labels = [0 for x in range(nClusters)]
 
@@ -342,7 +341,7 @@ def get_NMI_score(global_data_labels, clusters, data_size):
     HC = 0
     for ic in range(0, nClusters):
         nPoints = len(clusters[ic])
-
+        #print(ic, nPoints)
         nPos = 0
         nNeg = 0
         for jc in range(0, nPoints):
@@ -412,20 +411,12 @@ if __name__ == '__main__':
         if str(sys.argv[2]).lower() == "yes":
             beta0_tuned_trigger = True
 
-    step_size = 0.1
+    step_size = 0.01
     if len(sys.argv) > 3:
         if float(sys.argv[3]) < 0:
             print("Step size cannot be negative number!")
             exit()
         step_size = float(sys.argv[3])
-
-    degree = 1 # default value
-    if len(sys.argv) > 4:
-        if int(sys.argv[4]) <= 0:
-            print("Degree cannot be negative number or zero!")
-        degree = int(sys.argv[4]) # parse the degree
-
-    tunable_k = 51
 
     # --- My Parse Version (eval) --- #
     (gram_exp, data_label, data_size) = parse_gram_matrix(filename)
@@ -447,35 +438,25 @@ if __name__ == '__main__':
     # Key: # of clusters, Value: scores / printable strings
     best_nmi_scores = {}
     best_nmi_results = {}
-    for pre_n_cluster in range(2, min(tunable_k, data_size+1)):
+    for pre_n_cluster in range(2, min(51, data_size+1)):
         best_nmi_scores[pre_n_cluster] = -999.0
         best_nmi_results[pre_n_cluster] = ""
 
     alpha = 0.0
     beta = 0.0
-    while alpha <= 2.0:
+    while alpha <= 1.0:
         beta = 0.0
-        while beta < 2.0:
+        while beta < 1.0:
             if beta >= alpha:
                 break
             # Step 1: parse the gram expression first
-            for d_ in range(1, degree+1):
-                degree_alpha = math.pow(alpha, d_)
-                degree_beta = math.pow(beta, d_)
-
-                numpy_gm = get_gram_vals(gram_exp, data_size, degree_alpha, degree_beta)
-
-                if d_ == 1:
-                    gm = numpy_gm.tolist()
-                    dm = innerP2distance(gm, data_size) # this is the pairwise distance matrix
-                else:
-                    temp_gm = numpy_gm.tolist()
-                    gm = np.add(gm, temp_gm )
-                    dm = np.add(dm, innerP2distance(temp_gm, data_size) )
+            numpy_gm = get_gram_vals(gram_exp, data_size, alpha, beta)
+            gm = numpy_gm.tolist()
+            dm = innerP2distance(gm, data_size) # this is the pairwise distance matrix
             #(dm, gm, random_data_label) = randomize(dm, gm, data_size, data_label)
 
             # Step 2: calculate the NMI score if it is best
-            for decided_n_cluster in range(2, min(tunable_k,data_size+1)):
+            for decided_n_cluster in range(2, min(51,data_size+1)):
                 (cur_NMI, cur_IY_C_HY, cur_IY_C_HC, cur_F, cur_ARI) = cluster_score(gm, dm, data_label, data_size, decided_n_cluster, alpha, beta)
                 cur_result = str(alpha) + "," + str(beta) + "," + str(decided_n_cluster) + "," + str(cur_NMI)+ "," + str(cur_IY_C_HY)+ "," + str(cur_IY_C_HC) + "," + str(cur_F) + "," + str(cur_ARI)
                 if best_nmi_scores[decided_n_cluster] < float(cur_NMI):
@@ -488,5 +469,5 @@ if __name__ == '__main__':
         alpha += step_size
         # print("Progress: " + str(alpha))
 
-    for decided_n_cluster in range(2, min(tunable_k ,data_size+1)):
+    for decided_n_cluster in range(2, min(51,data_size+1)):
         print(best_nmi_results[decided_n_cluster])

@@ -1,14 +1,14 @@
-"""
-I write this function to parse gram matrix and reconstruct the program for parsing GP
-"""
 import os
 import re
-# import sympy
+from sklearn.cluster import KMeans
 import numpy as np
 import sys
-from hac_ch import HAC_CH
+from scipy import linalg
+#from pyclustering.samples.definitions import SIMPLE_SAMPLES, FCPS_SAMPLES;
+
+#from pyclustering.cluster.center_initializer import kmeans_plusplus_initializer;
+#from pyclustering.cluster.kmeans import kmeans;
 from sklearn import metrics
-import random
 import math
 
 def LOG_INFO(info):
@@ -183,11 +183,16 @@ def innerP2distance(_gm, _size):
         for j in range(_size):
             value = np.sqrt(_gm[i][i] + _gm[j][j] - 2 * _gm[i][j])
             if value != value:
-                print("Fatal Error(not a number): ", i, j, value, _gm[i][i], _gm[j][j], _gm[i][j], _gm[j][i], np.sqrt(_gm[i][i] + _gm[j][j] - 2 * _gm[i][j]))
+                errstr = "Fatal Error(not a number): ", i, j, value, _gm[i][i], _gm[j][j], _gm[i][j], _gm[j][i], np.sqrt(_gm[i][i] + _gm[j][j] - 2 * _gm[i][j])
+                eprint(errstr)
                 return None
             _dm[i][j] = value
 
     return _dm
+
+def eprint(*args, **kwargs):
+    print(*args, file=sys.stderr, **kwargs)
+
 
 def cluster_score(gm, dm, global_data_labels, data_size, register_n_cluster, alpha=1., beta=0.): # change to NMI!
     '''
@@ -196,10 +201,6 @@ def cluster_score(gm, dm, global_data_labels, data_size, register_n_cluster, alp
     # The gram matrix 'gm' is generated from 'get_elmnt'.
     # The number of folds is specified by the variable 'cv'.
     '''
-    #Add Randomize
-    # (dm,gm, global_data_labels) = randomize(dm, gm, data_size, global_data_labels)
-
-    # print("This is neg_cv_score, alpha = ", alpha, "beta = ", beta)
 
     # if dm == None:
     #     print("Invalid dm obtained!")
@@ -218,33 +219,56 @@ def cluster_score(gm, dm, global_data_labels, data_size, register_n_cluster, alp
         print("gram matrix:", row, col)
         print(gm)
         print("alpha:", alpha, "beta:", beta);
-        return -999.0,0,0,0;
+        return 0.0, 0.0, 0, 0, 0, 0
 
-    hac_instance = HAC_CH(dm, gm)
-    hac_instance.process_with_k(register_n_cluster)
+    T,Z = linalg.schur(gm)
+    T_sqrt = T
+    for a in range(data_size):
+        if T[a][a] >= 1e-10:
+            T_sqrt[a][a] = np.sqrt(T[a][a])
+        else:
+            T_sqrt[a][a] = 0
 
-    clusters = hac_instance.get_clusters()
-    (NMI, IY_C, HY, HC) = get_NMI_score(global_data_labels, clusters, data_size)
-    (F) = get_fmeasure_score(global_data_labels, clusters, data_size)
-    (ARI) = get_rand_index(global_data_labels, clusters, data_size)
-    return NMI, float(IY_C)/HY, float(IY_C)/HC, F, ARI
+    #S_sqrt = np.diag(s_sqrt)
+    LT =  np.dot(Z, T_sqrt) # gm = Z*T*Z^H = LT*LT^H, each row is coordinates
 
-def randomize(dm, gm, data_size, global_data_labels):
-    random_map = random.sample(range(0, data_size), data_size)
-    new_dm = []
-    new_gm = []
-    new_data_labels = []
+    try:
+        kmeans = KMeans(n_clusters=register_n_cluster, init='k-means++', n_init=10, max_iter=30,
+                           tol=0.0001,precompute_distances=True, verbose=0,
+                           random_state=None, copy_x=True, n_jobs=1).fit_predict(LT)
+    except:
+        return 0.0, 0.0, 0, 0, 0, 0
+    #print(kmeans)
+    clusters = [[] for i in range(0,register_n_cluster)]
     for i in range(0, data_size):
-        new_dm.append([])
-        new_gm.append([])
-        new_data_labels.append(global_data_labels[random_map[i]])
-        for j in range(0, data_size):
-            new_dm[i].append(dm[random_map[i]][random_map[j]])
-            new_gm[i].append(gm[random_map[i]][random_map[j]])
-    # for i in range(0, data_size):
-    #     print(i, random_map[i], global_data_labels[i], new_data_labels[i])
-    # exit()
-    return new_dm, new_gm, new_data_labels
+        clusters[kmeans[i]].append(i)
+
+    for _cluster in clusters:
+        if len(_cluster) < 1:
+            #print("Fatal Error: Empty Cluster Detected when k is ", register_n_cluster, "alpha: ", alpha, "beta: ", beta)
+            #exit()
+            errstr = "Fatal Error: Empty Cluster Detected when k is ", register_n_cluster, "alpha: ", alpha, "beta: ", beta
+            eprint(errstr)
+            return 0.0, 0.0, 0, 0, 0, 0
+    #print(clusters)
+    # #criterion = splitting_type.BAYESIAN_INFORMATION_CRITERION
+    # ccore = False
+    # tolerance = 0.1
+    # #initial_center = [ [ random.random() for _ in range(global_size)] for __ in range(register_n_cluster)];
+    # initial_centers = kmeans_plusplus_initializer(LT, register_n_cluster).initialize();
+    # kmeans_instance = kmeans(LT, initial_centers, tolerance, ccore)
+    #
+    # kmeans_instance.process()
+    #
+    # clusters = kmeans_instance.get_clusters()
+
+    (NMI, IY_C, HY, HC) = get_NMI_score(global_data_labels, clusters, data_size)
+    (TN, FP, FN, TP) = get_fmeasure_score(global_data_labels, clusters, data_size)
+    (ARI) = get_rand_index(global_data_labels, clusters, data_size)
+
+    return NMI, ARI, TN, FP, FN, TP
+
+
 
 def get_labels(clusters):
     total_elements = sum([len(cluster) for cluster in clusters]);
@@ -275,7 +299,7 @@ def get_rand_index(global_data_labels, clusters, data_size):
 
 def get_fmeasure_score(global_data_labels, clusters, data_size):
     nClusters = len(clusters)
-    cluster_labels = [0 for x in range(nClusters)]
+    cluster_labels = [0 for x in range(0, nClusters)]
     confusion_mat = [[0,0],[0,0]]
     for ic in range(0, nClusters):
         # print("For the ith cluster: ", ic)
@@ -306,19 +330,19 @@ def get_fmeasure_score(global_data_labels, clusters, data_size):
     # accuracy = (confusion_mat_sum[0][0]+confusion_mat_sum[1][1])/(confusion_mat_sum[0][0]+confusion_mat_sum[0][1]+confusion_mat_sum[1][0]+confusion_mat_sum[1][1])
     # print("Final accuracy for this set of parameter is: ", accuracy)
     # print("debug confusion: ", TN, FP, FN, TP)
-    if FN+TP == 0:
-        return 0
-    TPR = TP/(FN+TP)
-    if TP+FP == 0:
-        return 0
-    Precision = TP/(TP+FP)
-    F = 2*(Precision*TPR)/(Precision+TPR)
+    # if FN+TP == 0:
+    #     return 0
+    # TPR = TP/(FN+TP)
+    # if TP+FP == 0:
+    #     return 0
+    # Precision = TP/(TP+FP)
+    # F = 2*(Precision*TPR)/(Precision+TPR)
 
-    return F
+    return TN, FP, FN, TP
 
 def get_NMI_score(global_data_labels, clusters, data_size):
     nClusters = len(clusters)
-    cluster_labels = [0 for x in range(nClusters)]
+    cluster_labels = [0 for x in range(0, nClusters)]
 
     nPos = 0
     nNeg = 0
@@ -333,9 +357,9 @@ def get_NMI_score(global_data_labels, clusters, data_size):
     H_Pos = 0
     H_Neg = 0
     if pPos > 0:
-        H_Pos = -pPos*np.log2(pPos)
+        H_Pos = -pPos*(np.log2(nPos)-np.log2(data_size))
     if pNeg > 0:
-        H_Neg = -pNeg*np.log2(pNeg)
+        H_Neg = -pNeg*(np.log2(nNeg)-np.log2(data_size))
     HY = H_Pos + H_Neg
     #print(HY)
     HY_C = [0 for i in range(nClusters)]
@@ -357,12 +381,12 @@ def get_NMI_score(global_data_labels, clusters, data_size):
         H_Pos = 0
         H_Neg = 0
         if pPos > 0:
-            H_Pos = -pPos*np.log2(pPos)
+            H_Pos = -pPos*(np.log2(nPos)-np.log2(nPoints))
         if pNeg > 0:
-            H_Neg = -pNeg*np.log2(pNeg)
+            H_Neg = -pNeg*(np.log2(nNeg)-np.log2(nPoints))
 
         HY_C[ic] = pC*(H_Pos + H_Neg)
-        HC = HC - pC*np.log2(pC)
+        HC = HC - pC*(np.log2(nPoints)-np.log2(data_size))
 
     IY_C = HY - sum(HY_C)
     NMI = 2*IY_C/(HY+HC)
@@ -471,13 +495,17 @@ if __name__ == '__main__':
                 else:
                     temp_gm = numpy_gm.tolist()
                     gm = np.add(gm, temp_gm )
+                    temp_dm = innerP2distance(temp_gm, data_size)
+                    #print(dm[1][20],temp_dm[1][20])
+
                     dm = np.add(dm, innerP2distance(temp_gm, data_size) )
+                    #print(dm[1][20])
             #(dm, gm, random_data_label) = randomize(dm, gm, data_size, data_label)
 
             # Step 2: calculate the NMI score if it is best
             for decided_n_cluster in range(2, min(tunable_k,data_size+1)):
-                (cur_NMI, cur_IY_C_HY, cur_IY_C_HC, cur_F, cur_ARI) = cluster_score(gm, dm, data_label, data_size, decided_n_cluster, alpha, beta)
-                cur_result = str(alpha) + "," + str(beta) + "," + str(decided_n_cluster) + "," + str(cur_NMI)+ "," + str(cur_IY_C_HY)+ "," + str(cur_IY_C_HC) + "," + str(cur_F) + "," + str(cur_ARI)
+                (cur_NMI, cur_ARI, cur_TN, cur_FP, cur_FN, cur_TP) = cluster_score(gm, dm, data_label, data_size, decided_n_cluster, alpha, beta)
+                cur_result = str(alpha) + "," + str(beta) + "," + str(decided_n_cluster) + "," + str(cur_NMI)+ "," + str(cur_ARI)+ "," + str(cur_TN) + "," + str(cur_FP) + "," + str(cur_FN)+ "," + str(cur_TP)
                 if best_nmi_scores[decided_n_cluster] < float(cur_NMI):
                     best_nmi_scores[decided_n_cluster] = float(cur_NMI)
                     best_nmi_results[decided_n_cluster] = cur_result

@@ -1,14 +1,15 @@
-"""
-I write this function to parse gram matrix and reconstruct the program for parsing GP
-"""
 import os
 import re
-# import sympy
+from sklearn.cluster import SpectralClustering
 import numpy as np
 import sys
-from hac_ch import HAC_CH
+from scipy import linalg
+import math
+#from pyclustering.samples.definitions import SIMPLE_SAMPLES, FCPS_SAMPLES;
+
+#from pyclustering.cluster.center_initializer import kmeans_plusplus_initializer;
+#from pyclustering.cluster.kmeans import kmeans;
 from sklearn import metrics
-import random
 
 def LOG_INFO(info):
     print("Info:" + str(info));
@@ -188,17 +189,14 @@ def innerP2distance(_gm, _size):
 
     return _dm
 
-def cluster_score(global_gram_expression, global_data_labels, data_size, register_n_cluster, alpha=1., beta=0.): # change to NMI!
+def cluster_score(gm, dm, global_data_labels, data_size, register_n_cluster, alpha=1., beta=0.): # change to NMI!
     '''
     # Performs cross validation on a gram matrix of training data and
     # returns the averaged accuracy scores.
     # The gram matrix 'gm' is generated from 'get_elmnt'.
     # The number of folds is specified by the variable 'cv'.
     '''
-    # print("This is neg_cv_score, alpha = ", alpha, "beta = ", beta)
-    numpy_gm = get_gram_vals(global_gram_expression, data_size, alpha, beta)
-    gm = numpy_gm.tolist()
-    dm = innerP2distance(gm, data_size) # this is the pairwise distance matrix
+
     if dm == None:
         print("Invalid dm obtained!")
         return -999.0,0,0,0
@@ -218,34 +216,55 @@ def cluster_score(global_gram_expression, global_data_labels, data_size, registe
         print("alpha:", alpha, "beta:", beta);
         return -999.0,0,0,0;
 
-    #Add Randomize
-    (dm,gm, global_data_labels) = randomize(dm, gm, data_size, global_data_labels)
+    # T,Z = linalg.schur(gm)
+    # T_sqrt = T
+    # for a in range(data_size):
+    #     if T[a][a] >= 1e-10:
+    #         T_sqrt[a][a] = np.sqrt(T[a][a])
+    #     else:
+    #         T_sqrt[a][a] = 0
+    #
+    # #S_sqrt = np.diag(s_sqrt)
+    # LT =  np.dot(Z, T_sqrt) # gm = Z*T*Z^H = LT*LT^H, each row is coordinates
 
-    hac_instance = HAC_CH(dm, gm)
-    hac_instance.process_with_k(register_n_cluster)
+    # kmeans = KMeans(n_clusters=register_n_cluster, init='k-means++', n_init=10, max_iter=30,
+    #                    tol=0.0001,precompute_distances=True, verbose=0,
+    #                    random_state=None, copy_x=True, n_jobs=1).fit_predict(LT)
 
-    clusters = hac_instance.get_clusters()
+    spec = SpectralClustering(n_clusters=register_n_cluster, eigen_solver=None, random_state=None,
+                        n_init=10, gamma=1.0, affinity='precomputed', n_neighbors=10,
+                        eigen_tol=0.0, assign_labels='kmeans', degree=3, coef0=1,
+                        kernel_params=None, n_jobs=1).fit_predict(gm)
+    #print(spec)
+    clusters = [[] for i in range(0,register_n_cluster)]
+    for i in range(0, data_size):
+        clusters[spec[i]].append(i)
+
+    # Debug if there is empyt cluster
+    for _cluster in clusters:
+        if len(_cluster) < 1:
+            print("Fatal Error: Empty Cluster Detected when k is ", register_n_cluster, "alpha: ", alpha, "beta: ", beta)
+            exit()
+
+    #print(clusters)
+    # #criterion = splitting_type.BAYESIAN_INFORMATION_CRITERION
+    # ccore = False
+    # tolerance = 0.1
+    # #initial_center = [ [ random.random() for _ in range(global_size)] for __ in range(register_n_cluster)];
+    # initial_centers = kmeans_plusplus_initializer(LT, register_n_cluster).initialize();
+    # kmeans_instance = kmeans(LT, initial_centers, tolerance, ccore)
+    #
+    # kmeans_instance.process()
+    #
+    # clusters = kmeans_instance.get_clusters()
+
     (NMI, IY_C, HY, HC) = get_NMI_score(global_data_labels, clusters, data_size)
     (F) = get_fmeasure_score(global_data_labels, clusters, data_size)
     (ARI) = get_rand_index(global_data_labels, clusters, data_size)
+
     return NMI, float(IY_C)/HY, float(IY_C)/HC, F, ARI
 
-def randomize(dm, gm, data_size, global_data_labels):
-    random_map = random.sample(range(0, data_size), data_size)
-    new_dm = []
-    new_gm = []
-    new_data_labels = []
-    for i in range(0, data_size):
-        new_dm.append([])
-        new_gm.append([])
-        new_data_labels.append(global_data_labels[random_map[i]])
-        for j in range(0, data_size):
-            new_dm[i].append(dm[random_map[i]][random_map[j]])
-            new_gm[i].append(gm[random_map[i]][random_map[j]])
-    # for i in range(0, data_size):
-    #     print(i, random_map[i], global_data_labels[i], new_data_labels[i])
-    # exit()
-    return new_dm, new_gm, new_data_labels
+
 
 def get_labels(clusters):
     total_elements = sum([len(cluster) for cluster in clusters]);
@@ -334,9 +353,9 @@ def get_NMI_score(global_data_labels, clusters, data_size):
     H_Pos = 0
     H_Neg = 0
     if pPos > 0:
-        H_Pos = -pPos*np.log2(pPos)
+        H_Pos = -pPos*(np.log2(nPos)-np.log2(data_size))
     if pNeg > 0:
-        H_Neg = -pNeg*np.log2(pNeg)
+        H_Neg = -pNeg*(np.log2(nNeg)-np.log2(data_size))
     HY = H_Pos + H_Neg
     #print(HY)
     HY_C = [0 for i in range(nClusters)]
@@ -358,12 +377,12 @@ def get_NMI_score(global_data_labels, clusters, data_size):
         H_Pos = 0
         H_Neg = 0
         if pPos > 0:
-            H_Pos = -pPos*np.log2(pPos)
+            H_Pos = -pPos*(np.log2(nPos)-np.log2(nPoints))
         if pNeg > 0:
-            H_Neg = -pNeg*np.log2(pNeg)
+            H_Neg = -pNeg*(np.log2(nNeg)-np.log2(nPoints))
 
         HY_C[ic] = pC*(H_Pos + H_Neg)
-        HC = HC - pC*np.log2(pC)
+        HC = HC - pC*(np.log2(nPoints)-np.log2(data_size))
 
     IY_C = HY - sum(HY_C)
     NMI = 2*IY_C/(HY+HC)
@@ -404,15 +423,29 @@ def assistFile(info, filename):
 if __name__ == '__main__':
     if len(sys.argv) < 2:
         print("Please provide file name! ")
-        print("e.g. python3 kernel_grid_search_hac_nmi_tune.py your_kernel.kernel your_desired_step_size(default: 0.01)")
+        print("e.g. python3 kernel_grid_search_hac_nmi_tune.py your_kernel.kernel your_option_tuned_beta0(default: false) your_desired_step_size(default: 0.01)")
         exit()
     filename = sys.argv[1]
-    step_size = 0.01
+
+    beta0_tuned_trigger = False
     if len(sys.argv) > 2:
-        if float(sys.argv[2]) < 0:
+        if str(sys.argv[2]).lower() == "yes":
+            beta0_tuned_trigger = True
+
+    step_size = 0.01
+    if len(sys.argv) > 3:
+        if float(sys.argv[3]) < 0:
             print("Step size cannot be negative number!")
             exit()
-        step_size = float(sys.argv[2])
+        step_size = float(sys.argv[3])
+
+    degree = 1 # default value
+    if len(sys.argv) > 4:
+        if int(sys.argv[4]) <= 0:
+            print("Degree cannot be negative number or zero!")
+        degree = int(sys.argv[4]) # parse the degree
+
+    tunable_k = 51
 
     # --- My Parse Version (eval) --- #
     (gram_exp, data_label, data_size) = parse_gram_matrix(filename)
@@ -430,31 +463,42 @@ if __name__ == '__main__':
     # validate(gram_exp, size1, gram_exp_sympy, size2)
     # validate_vals(gram_vals, size1, gram_vals_sympy, size2)
 
-    for decided_n_cluster in range(2, min(data_size+1, 51)):
-        register_n_cluster = decided_n_cluster
-        # Grid Search
-        alpha = 0.0
+    # A map data structure to store final results
+    # Key: # of clusters, Value: scores / printable strings
+    best_nmi_scores = {}
+    best_nmi_results = {}
+    for pre_n_cluster in range(2, min(tunable_k, data_size+1)):
+        best_nmi_scores[pre_n_cluster] = -999.0
+        best_nmi_results[pre_n_cluster] = ""
+
+    alpha = 0.0
+    beta = 0.0
+    while alpha <= 1.0:
         beta = 0.0
-        target_NMI = -998.0
-        target_alpha = -1.0
-        target_beta = -1.0
-        target_IY_C_HY = -999.0
-        target_IY_C_HC = -999.0
-        target_F = -999.0
-        target_ARI = -999.0
+        while beta < 1.0:
+            if beta >= alpha:
+                break
+            # Step 1: parse the gram expression first
+            degree_alpha = math.pow(alpha, degree)
+            degree_beta = math.pow(beta, degree)
+            numpy_gm = get_gram_vals(gram_exp, data_size, degree_alpha, degree_beta)
+            gm = numpy_gm.tolist()
+            dm = innerP2distance(gm, data_size) # this is the pairwise distance matrix
+            #(dm, gm, random_data_label) = randomize(dm, gm, data_size, data_label)
 
+            # Step 2: calculate the NMI score if it is best
+            for decided_n_cluster in range(2, min(tunable_k,data_size+1)):
+                (cur_NMI, cur_IY_C_HY, cur_IY_C_HC, cur_F, cur_ARI) = cluster_score(gm, dm, data_label, data_size, decided_n_cluster, alpha, beta)
+                cur_result = str(alpha) + "," + str(beta) + "," + str(decided_n_cluster) + "," + str(cur_NMI)+ "," + str(cur_IY_C_HY)+ "," + str(cur_IY_C_HC) + "," + str(cur_F) + "," + str(cur_ARI)
+                if best_nmi_scores[decided_n_cluster] < float(cur_NMI):
+                    best_nmi_scores[decided_n_cluster] = float(cur_NMI)
+                    best_nmi_results[decided_n_cluster] = cur_result
+            # Step 3: if not tuned beta0 just skipped tunning
+            if not beta0_tuned_trigger:
+                break
+            beta += step_size
+        alpha += step_size
+        # print("Progress: " + str(alpha))
 
-        while alpha < 1.0:
-            (cur_NMI, cur_IY_C_HY, cur_IY_C_HC, cur_F, cur_ARI) = cluster_score(gram_exp, data_label, data_size, decided_n_cluster, alpha, beta)
-            # print(str(register_n_cluster) + "," + str(alpha) + "," + str(cur_NMI))
-            if cur_NMI > target_NMI:
-                target_NMI = cur_NMI
-                target_alpha = alpha
-                target_beta = beta
-                target_IY_C_HY = cur_IY_C_HY
-                target_IY_C_HC = cur_IY_C_HC
-                target_F = cur_F
-                target_ARI = cur_ARI
-            alpha += step_size
-        # format: alpha beta k nmi IY_C/HY IY_C/HC F-measure ARI
-        print(str(target_alpha) + "," + str(target_beta) + "," + str(register_n_cluster) + "," + str(target_NMI)+ "," + str(target_IY_C_HY)+ "," + str(target_IY_C_HC) + "," + str(target_F) + "," + str(target_ARI))
+    for decided_n_cluster in range(2, min(tunable_k ,data_size+1)):
+        print(best_nmi_results[decided_n_cluster])

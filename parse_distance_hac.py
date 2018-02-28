@@ -88,7 +88,7 @@ def get_hac_clusters(distance_matrix):
     result.append(dict(clusters))
     X = ssd.squareform(distance_matrix)
     # Other available method: [single, complete, average, weighted, centroid, median, ward]
-    Z = linkage(X, 'complete')
+    Z = linkage(X, 'ward')
     idx = 1
     for layer in Z:
         i1 = int(layer[0])
@@ -126,9 +126,11 @@ def cluster_score(distance_matrix, data_label, data_size):
         (NMI, IY_C, HY, HC) = get_NMI_score(data_label, clusters, data_size)
         IY_C_HY = float(IY_C)/HY
         IY_C_HC = float(IY_C)/HC
-        (F) = get_fmeasure_score(data_label, clusters, data_size)
+        (F, confusion_mat) = get_fmeasure_score(data_label, clusters, data_size)
         (ARI) = get_rand_index(data_label, clusters, data_size)
-        print(str(len(clusters)) + "," + str(NMI)+ "," + str(IY_C_HY)+ "," + str(IY_C_HC) + "," + str(F) + "," + str(ARI))
+        # result = (a, b, k, max_nmi, aris((a,b,d,k)), cm(0)(0), cm(0)(1), cm(1)(0), cm(1)(1))
+        result = str(0) + "," + str(0) + "," + str(len(clusters)) + "," + str(NMI)+ "," + str(ARI) + "," + str(confusion_mat[0][0]) + "," + str(confusion_mat[0][1]) + "," + str(confusion_mat[1][0]) + "," + str(confusion_mat[1][1])
+        print(result)
         scores.insert(0, F)
 
     return scores
@@ -194,14 +196,14 @@ def get_fmeasure_score(global_data_labels, clusters, data_size):
     # print("Final accuracy for this set of parameter is: ", accuracy)
     # print("debug confusion: ", TN, FP, FN, TP)
     if FN+TP == 0:
-        return 0
+        return 0, confusion_mat
     TPR = TP/(FN+TP)
     if TP+FP == 0:
-        return 0
+        return 0, confusion_mat
     Precision = TP/(TP+FP)
     F = 2*(Precision*TPR)/(Precision+TPR)
 
-    return F
+    return F, confusion_mat
 
 def get_NMI_score(global_data_labels, clusters, data_size):
     nClusters = len(clusters)
