@@ -3,7 +3,7 @@ I write this function to parse gram matrix and reconstruct the program for parsi
 """
 import os
 import re
-import sympy
+# import sympy
 import numpy as np
 import sys
 from hac_ch import HAC_CH
